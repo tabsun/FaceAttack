@@ -7,7 +7,7 @@ import numpy as np
 import random
 from tqdm import tqdm
 #from data.eval_data_reader import load_bin
-from losses.face_losses import arcface_loss
+from losses.face_losses import arcface_loss, batch_arcface_loss
 from nets.L_Resnet_E_IR_fix_issue9 import get_resnet
 #import tensorlayer as tl
 #from verification import ver_test
@@ -41,9 +41,11 @@ if __name__ == '__main__':
     # get 712 lfw images' id in this pretrained model
     lfw_df = pd.read_csv('lfw_ids.csv')
     lfw_ids = dict()
+    lfw_losses = dict()
     for image_name, id_prob in zip(lfw_df.image_name, lfw_df.id_prob):
         prob = [float(x) for x in id_prob.split('_')]
         lfw_ids[image_name] = prob.index(min(prob))
+        lfw_losses[image_name] = min(prob)
 
     best_target_ids = dict()
     for image_name, id_prob in zip(lfw_df.image_name, lfw_df.id_prob):
@@ -71,21 +73,23 @@ if __name__ == '__main__':
         target_labels.append(target_label)
 
     w, h = args.image_size
-    images = tf.placeholder(name='img_inputs', shape=[None, h, w, 3], dtype=tf.float32)
-    labels = tf.placeholder(name='img_labels', shape=[None, ], dtype=tf.int64)
+    input_images = tf.placeholder(name='img_inputs', shape=[None, h, w, 3], dtype=tf.float32)
+    input_labels = tf.placeholder(name='img_labels', shape=[None, ], dtype=tf.int64)
     dropout_rate = tf.placeholder(name='dropout_rate', dtype=tf.float32)
 
     w_init_method = tf.contrib.layers.xavier_initializer(uniform=False)
-    net = get_resnet(images, args.net_depth, type='ir', w_init=w_init_method, trainable=False, keep_rate=dropout_rate)
+    net = get_resnet(input_images, args.net_depth, type='ir', w_init=w_init_method, trainable=False, keep_rate=dropout_rate)
     embedding_tensor = net.outputs
     # 3.2 get arcface loss
-    logit = arcface_loss(embedding=net.outputs, labels=labels, w_init=w_init_method, out_num=args.num_output)
-    #logit = tf.squeeze(logit, axis=0)
-    prediction = tf.argmax(logit, axis=1)
-    inference_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=labels)
-    #gt_index = tf.argmin(inference_loss, 1)
+    logits = batch_arcface_loss(embedding=net.outputs, labels=input_labels, labels_num=711, w_init=w_init_method, out_num=args.num_output)
+    logit = tf.squeeze(logits, axis=0)
+    prediction = tf.argmax(tf.reduce_mean(logit, axis=0))
+    
+    inference_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logit, labels=input_labels)
+    #prediction = tf.argmin(inference_loss, 0) #tf.argmax(logit[best_target], axis=1)
+    #prediction_loss = tf.reduce_min(inference_loss)
 
-    img_grad = tf.gradients(inference_loss, images)[0]
+    img_grad = tf.gradients(tf.reduce_min(inference_loss), input_images)[0]
 
     step_size = 0.5
     steps = 500
@@ -116,22 +120,26 @@ if __name__ == '__main__':
     #        f.write('%s,%s,%s,%s\n' % (image_id,image_name,person_name,'_'.join(['%.4f'%x for x in id_losses])))
     #exit(0)
 
-
+    limit_range = 25.5
     for image_name, cur_attack_image, cur_attack_label in zip(df.ImageName, original_images, target_labels):
-        batch_adv_image = np.expand_dims(cur_attack_image, axis=0).copy()
-        batch_target_labels = list([cur_attack_label])
+        batch_adv_image = np.expand_dims(cur_attack_image.copy(), axis=0)
+        #batch_target_labels = list([cur_attack_label])
+        batch_target_labels = list(lfw_ids.values())
+        batch_target_labels.remove(lfw_ids[image_name])
+        target_loss = lfw_losses[image_name]
 
         delta = np.zeros((1,112,112,3), dtype=np.float32)
         for i in range(0, steps):
             cur_adv_image = np.clip(batch_adv_image + delta, -1.0, 1.0)
-            prediction_val = prediction.eval({images: cur_adv_image, labels: batch_target_labels, dropout_rate:1.0}, session=sess)
-            print('Step @ %d : target: %d now: %d' % (i, batch_target_labels[0], prediction_val[0]))
-            if(prediction_val[0] == batch_target_labels[0]):
+            prediction_val = prediction.eval({input_images: cur_adv_image, input_labels: batch_target_labels, dropout_rate:1.0}, session=sess)
+            #prediction_val_loss = prediction_loss.eval({input_images: cur_adv_image, input_labels: batch_target_labels, dropout_rate:1.0}, session=sess)
+            print('Step @ %d : target: %d now: %d ' % (i, lfw_ids[image_name] , prediction_val))
+            if(prediction_val != lfw_ids[image_name]): #prediction_val_loss < target_loss/2.0 ):
                 break
-            gradient = img_grad.eval({images: cur_adv_image, labels: batch_target_labels, dropout_rate:1.0}, session=sess)
-            if(np.array_equal(np.clip(delta - step_size*gradient, -25.5 * 0.0078125, 25.5 * 0.0078125), delta)):
+            gradient = img_grad.eval({input_images: cur_adv_image, input_labels: batch_target_labels, dropout_rate:1.0}, session=sess)
+            if(np.array_equal(np.clip(delta - step_size*gradient, -limit_range * 0.0078125, limit_range * 0.0078125), delta)):
                 break
-            delta = np.clip(delta - step_size * gradient, -25.5 * 0.0078125, 25.5 * 0.0078125)
+            delta = np.clip(delta - step_size * gradient, -limit_range * 0.0078125, limit_range * 0.0078125)
             if(np.array_equal(np.clip(batch_adv_image+delta,-1.0,1.0), batch_adv_image)):
                 break
         adv_image = np.clip((batch_adv_image + delta)*128 + 127.5, 0, 255)
