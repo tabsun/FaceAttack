@@ -12,6 +12,10 @@ opencv-python
 
 ...
 
+## Pre-trained models
+
+You can download the needed model files from [Baidu Cloud]() but I know the download speed will be a pity:(
+
 ## How to run it?
 
 1. Generate all 712 images' embeddings by different networks. Here I used six models including MX-insightFace's models and TF-insightFace's models because InsightFace is well-known for its performance on LFW. But most models' backbones are resnet series, a better choice is to add some different backbones like mobilenet or inception.
@@ -39,3 +43,15 @@ After this, the code will save ad-images under ./adv_images with name like 00004
 1. I tried targeted method with arcface loss and the best score is almost 7.x. The generality seems a bottleneck.
 
 2. If you have any questions or interests in this code, welcome to send a mail to buptmsg@gmail.com.
+
+## Citations
+
+[InsightFace_TF](https://github.com/auroua/InsightFace_TF)
+
+[InsightFace_MXNet](https://github.com/deepinsight/insightface)
+
+[Model conversion](https://github.com/microsoft/MMdnn/issues/135)
+
+[FaceNet](https://github.com/davidsandberg/facenet)
+
+
