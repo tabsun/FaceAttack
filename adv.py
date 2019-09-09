@@ -8,11 +8,11 @@ import math
 from numpy import linalg as LA
 import random
 from tqdm import tqdm
-from losses.face_losses import arcface_loss, batch_arcface_loss, triplet_loss, single_loss
+from losses.face_losses import triplet_loss
 from nets.L_Resnet_E_IR_GBN import get_resnet_gbn
 from nets.L_Resnet_E_IR import get_resnet
 from nets.L_Resnet_E_IR_fix_issue9 import get_resnet_fi9
-from nets.facenet import get_facenet, get_gacenet
+from nets.facenet import get_facenet
 from nets.mxnet_models import get_mx34, get_mx50, get_mx100
 
 
@@ -20,13 +20,9 @@ def get_args():
     parser = argparse.ArgumentParser(description='input information')
     parser.add_argument('--ckpt_file_c', default='./models/ckpt_model_c/',
                        type=str, help='the ckpt file path')
-    parser.add_argument('--ckpt_file_d', default='./models/ckpt_model_d/',
-                       type=str, help='the ckpt file path')
     parser.add_argument('--ckpt_file_a', default='./models/ckpt_model_a/',
                        type=str, help='the ckpt file path')
     parser.add_argument('--ckpt_file_f', default='./models/facenet_114759/',
-                       type=str, help='the ckpt file path')
-    parser.add_argument('--ckpt_file_g', default='./models/facenet_102900/',
                        type=str, help='the ckpt file path')
     parser.add_argument('--eval_datasets', default=['agedb_30'], help='evluation datasets')
     parser.add_argument('--eval_db_path', default='./datasets/faces_ms1m_112x112', help='evluate datasets base path')
@@ -37,28 +33,12 @@ def get_args():
     parser.add_argument('--start_pos', type=int, default=0, help='start_point')
     parser.add_argument('--ckpt_index_c',
                         default='InsightFace_iter_best_1950000.ckpt', help='ckpt file indexes')
-    parser.add_argument('--ckpt_index_d',
-                        default='InsightFace_iter_best_710000.ckpt', help='ckpt file indexes')
     parser.add_argument('--ckpt_index_a',
                         default='InsightFace_iter_1060000.ckpt', help='ckpt file indexes')
     parser.add_argument('--ckpt_index_f',
                         default='model-20180402-114759.ckpt', help='ckpt file indexes')
-    parser.add_argument('--ckpt_index_g',
-                        default='model-20180408-102900.ckpt', help='ckpt file indexes')
     args = parser.parse_args()
     return args
-
-def search_best_step_size(step_num, total_step):
-    return max(0.08, min(0.5, 0.5 - step_num * 0.42 / 100))
-
-    #valid_step_sizes = []
-    #for step_size in range(5, 100, 5):
-    #    step_size /= 100.
-    #    if(LA.norm(delta - step_size * gradient) < max_norm):
-    #        valid_step_sizes.append(step_size)
-    #valid_step_sizes = sorted(valid_step_sizes)
-    #return valid_step_sizes[len(valid_step_sizes)//2]
-
 
 if __name__ == '__main__':
     args = get_args()
@@ -70,31 +50,25 @@ if __name__ == '__main__':
     original_images = []
     start_deltas = []
     # get 712 lfw images' id in this pretrained model
-    df_c = pd.read_csv('./lfw_emd_1950000_multi.csv')
-    df_d = pd.read_csv('./lfw_emd_710000_multi.csv')
-    df_a = pd.read_csv('./lfw_emd_1060000_multi.csv')
-    df_f = pd.read_csv('./lfw_emd_facenet_multi.csv')
-    df_g = pd.read_csv('./lfw_emd_gacenet_multi.csv')
-    df_mx34 = pd.read_csv('./lfw_emd_mx34_multi.csv')
-    df_mx50 = pd.read_csv('./lfw_emd_mx50_multi.csv')
-    df_mx100 = pd.read_csv('./lfw_emd_mx100_multi.csv')
+    df_c = pd.read_csv('./csvs/lfw_emd_1950000_multi.csv')
+    df_a = pd.read_csv('./csvs/lfw_emd_1060000_multi.csv')
+    df_f = pd.read_csv('./csvs/lfw_emd_facenet_multi.csv')
+    df_mx34 = pd.read_csv('./csvs/lfw_emd_mx34_multi.csv')
+    df_mx50 = pd.read_csv('./csvs/lfw_emd_mx50_multi.csv')
+    df_mx100 = pd.read_csv('./csvs/lfw_emd_mx100_multi.csv')
     emd_c_dict = dict()
     emd_a_dict = dict()
-    emd_d_dict = dict()
     emd_f_dict = dict()
-    emd_g_dict = dict()
     emd_34_dict = dict()
     emd_50_dict = dict()
     emd_100_dict = dict()
     count = 0
-    for image_name, emd_c_, emd_d_, emd_a_, emd_f_, emd_g_, emd_34_, emd_50_, emd_100_ in zip(df_c.image_name, df_c.id_embedding, df_d.id_embedding, df_a.id_embedding, df_f.id_embedding, df_g.id_embedding, df_mx34.id_embedding, df_mx50.id_embedding, df_mx100.id_embedding):
+    for image_name, emd_c_, emd_a_, emd_f_, emd_34_, emd_50_, emd_100_ in zip(df_c.image_name, df_c.id_embedding, df_a.id_embedding, df_f.id_embedding, df_mx34.id_embedding, df_mx50.id_embedding, df_mx100.id_embedding):
         count += 1
         print(count)
         emd_c_dict[image_name] = [float(x) for x in emd_c_.split('_')]
-        emd_d_dict[image_name] = [float(x) for x in emd_d_.split('_')]
         emd_a_dict[image_name] = [float(x) for x in emd_a_.split('_')]
         emd_f_dict[image_name] = [float(x) for x in emd_f_.split('_')]
-        emd_g_dict[image_name] = [float(x) for x in emd_g_.split('_')]
         emd_34_dict[image_name] = [float(x) for x in emd_34_.split('_')]
         emd_50_dict[image_name] = [float(x) for x in emd_50_.split('_')]
         emd_100_dict[image_name] = [float(x) for x in emd_100_.split('_')]
@@ -102,10 +76,11 @@ if __name__ == '__main__':
     #
     print("Finding fastest image name")
     fastest_image_names = dict()
-    with open('six_farest.csv', 'r') as f:
+    with open('/csvs/six_farest.csv', 'r') as f:
         for line in f.readlines():
             first, second = line.strip().split(',')
             fastest_image_names[first] = second
+
     #count = 0
     #for image_name in df_c.image_name:
     #    count += 1
@@ -160,27 +135,18 @@ if __name__ == '__main__':
     for image_id, image_name in zip(df.ImageId, df.ImageName):
         image = cv2.imread(os.path.join(image_dir, image_name))
         image = (image - 127.5) * 0.0078125
-        #start_image = cv2.imread(os.path.join(start_image_dir, image_name))
-        #start_image = (start_image - 127.5) * 0.0078125
         original_images.append(image)
         start_deltas.append(np.zeros((112,112,3), dtype=np.float))
-        #start_deltas.append(np.load('mean_delta.npy')*0.0078125)
-        #start_deltas.append((start_image - image))
-        #start_deltas.append(np.random.uniform(low=-0.0078125, high=0.0078125, size=(112,112,3)))
 
     w, h = args.image_size
     input_deltas = tf.placeholder(name='delta_inputs', shape=[None, h, w, 3], dtype=tf.float32)
     input_images = tf.placeholder(name='img_inputs', shape=[None, h, w, 3], dtype=tf.float32)
     pos_embedding_c = tf.placeholder(name='pos_embedding_c', shape=[None, 512], dtype=tf.float32)
     neg_embedding_c = tf.placeholder(name='neg_embedding_c', shape=[None, 512], dtype=tf.float32)
-    pos_embedding_d = tf.placeholder(name='pos_embedding_d', shape=[None, 512], dtype=tf.float32)
-    neg_embedding_d = tf.placeholder(name='neg_embedding_d', shape=[None, 512], dtype=tf.float32)
     pos_embedding_a = tf.placeholder(name='pos_embedding_a', shape=[None, 512], dtype=tf.float32)
     neg_embedding_a = tf.placeholder(name='neg_embedding_a', shape=[None, 512], dtype=tf.float32)
     pos_embedding_f = tf.placeholder(name='pos_embedding_f', shape=[None, 512], dtype=tf.float32)
     neg_embedding_f = tf.placeholder(name='neg_embedding_f', shape=[None, 512], dtype=tf.float32)
-    pos_embedding_g = tf.placeholder(name='pos_embedding_g', shape=[None, 512], dtype=tf.float32)
-    neg_embedding_g = tf.placeholder(name='neg_embedding_g', shape=[None, 512], dtype=tf.float32)
     pos_embedding_34 = tf.placeholder(name='pos_embedding_34', shape=[None, 512], dtype=tf.float32)
     neg_embedding_34 = tf.placeholder(name='neg_embedding_34', shape=[None, 512], dtype=tf.float32)
     pos_embedding_50 = tf.placeholder(name='pos_embedding_50', shape=[None, 512], dtype=tf.float32)
@@ -206,10 +172,6 @@ if __name__ == '__main__':
     net_c = get_resnet(aug_input, args.net_depth, scope='resnet_1950000_50', type='ir', w_init=w_init_method, trainable=False, keep_rate=dropout_rate)
     embedding_tensor_c = tf.reduce_mean(net_c.outputs, axis=0, keep_dims=True)
 
-    # network D
-    net_d = get_resnet_fi9(aug_input, args.net_depth, scope='resnet_710000_50', type='ir', w_init=w_init_method, trainable=False, keep_rate=dropout_rate)
-    embedding_tensor_d = tf.reduce_mean(net_d.outputs, axis=0, keep_dims=True)
-
     # network A
     net_a = get_resnet_gbn(aug_input, args.net_depth, scope='resnet_1060000_50', type='ir', w_init=w_init_method, trainable=False, keep_rate=dropout_rate)
     embedding_tensor_a = tf.reduce_mean(net_a.outputs, axis=0, keep_dims=True)
@@ -218,10 +180,6 @@ if __name__ == '__main__':
     aug_input_160 = tf.image.resize_images(aug_input, (160,160), method=0)
     embedding_tensors_f, _ = get_facenet(aug_input_160, 1., phase_train=False, bottleneck_layer_size=512, weight_decay=0.0, reuse=None)
     embedding_tensor_f = tf.reduce_mean(embedding_tensors_f, axis=0, keep_dims=True)
-
-    # gacenet
-    embedding_tensors_g, _ = get_gacenet(aug_input_160, 1., phase_train=False, bottleneck_layer_size=512, weight_decay=0.0, reuse=None)
-    embedding_tensor_g = tf.reduce_mean(embedding_tensors_g, axis=0, keep_dims=True)
 
     sess = tf.Session()
     # mxnet-resnet34 50 100
@@ -235,10 +193,8 @@ if __name__ == '__main__':
 
     triplet_alpha = 2.0
     trip_loss_c = triplet_loss(embedding_tensor_c, pos_embedding_c, neg_embedding_c, triplet_alpha)
-    trip_loss_d = triplet_loss(embedding_tensor_d, pos_embedding_d, neg_embedding_d, triplet_alpha)
     trip_loss_a = triplet_loss(embedding_tensor_a, pos_embedding_a, neg_embedding_a, triplet_alpha)
     trip_loss_f = triplet_loss(embedding_tensor_f, pos_embedding_f, neg_embedding_f, triplet_alpha)
-    trip_loss_g = triplet_loss(embedding_tensor_g, pos_embedding_g, neg_embedding_g, triplet_alpha)
     trip_loss_34 = triplet_loss(embedding_tensor_34, pos_embedding_34, neg_embedding_34, triplet_alpha)
     trip_loss_50 = triplet_loss(embedding_tensor_50, pos_embedding_50, neg_embedding_50, triplet_alpha)
     trip_loss_100 = triplet_loss(embedding_tensor_100, pos_embedding_100, neg_embedding_100, triplet_alpha)
@@ -256,21 +212,17 @@ if __name__ == '__main__':
     #        exit(0)
     saver_c = tf.train.Saver([v for v in tf.all_variables() if '1950000' in v.name])
     saver_c.restore(sess, args.ckpt_file_c + args.ckpt_index_c)
-    saver_d = tf.train.Saver([v for v in tf.all_variables() if '710000' in v.name])
-    saver_d.restore(sess, args.ckpt_file_d + args.ckpt_index_d)
     saver_a = tf.train.Saver([v for v in tf.all_variables() if '1060000' in v.name])
     saver_a.restore(sess, args.ckpt_file_a + args.ckpt_index_a)
     saver_f = tf.train.Saver([v for v in tf.all_variables() if 'InceptionResnetV1' in v.name])
     saver_f.restore(sess, args.ckpt_file_f + args.ckpt_index_f)
-    saver_g = tf.train.Saver([v for v in tf.all_variables() if 'gacenet' in v.name])
-    saver_g.restore(sess, args.ckpt_file_g + args.ckpt_index_g)
 
     limit_range = 25.5
     norm_cum = 0
     cum_num = 0
-    for image_name, cur_attack_image, cur_start_delta in zip(df.ImageName[args.start_pos:args.start_pos+41], 
-            original_images[args.start_pos:args.start_pos+41], 
-            start_deltas[args.start_pos:args.start_pos+41]):
+    for image_name, cur_attack_image, cur_start_delta in zip(df.ImageName, 
+            original_images, 
+            start_deltas):
 
         batch_adv_image = np.expand_dims(cur_attack_image.copy(), axis=0)
         target_image_names = [fastest_image_names[image_name]]
@@ -279,14 +231,10 @@ if __name__ == '__main__':
         for target_image_name in target_image_names:
             pos_emd_c = emd_c_dict[target_image_name]
             neg_emd_c = emd_c_dict[image_name]
-            pos_emd_d = emd_d_dict[target_image_name]
-            neg_emd_d = emd_d_dict[image_name]
             pos_emd_a = emd_a_dict[target_image_name]
             neg_emd_a = emd_a_dict[image_name]
             pos_emd_f = emd_f_dict[target_image_name]
             neg_emd_f = emd_f_dict[image_name]
-            pos_emd_g = emd_g_dict[target_image_name]
-            neg_emd_g = emd_g_dict[image_name]
             pos_emd_34 = emd_34_dict[target_image_name]
             neg_emd_34 = emd_34_dict[image_name]
             pos_emd_50 = emd_50_dict[target_image_name]
@@ -296,31 +244,21 @@ if __name__ == '__main__':
 
             delta = np.expand_dims(cur_start_delta.copy(), axis=0)
             momentum = np.zeros((1,112,112,3), dtype=np.float32)
-            vt = np.zeros((1,112,112,3), dtype=np.float32)
-            mt = np.zeros((1,112,112,3), dtype=np.float32)
             alpha = 0.5
             beta = 0.5
-            beta1 = 0.9
-            beta2 = 0.99
             epsilon = 10e-8
 
             targeted = False
-            lost = False
-            zero_passed = False
             prev_total_val_loss = float('inf')
             for i in range(0, steps):
-                total_val_loss, loss_c, loss_d, loss_a, loss_f, loss_g, loss_34, loss_50, loss_100 = sess.run([total_loss, trip_loss_c, trip_loss_d, trip_loss_a, trip_loss_f, trip_loss_g, trip_loss_34, trip_loss_50, trip_loss_100], feed_dict={input_deltas: delta, 
+                total_val_loss, loss_c, loss_a, loss_f, loss_34, loss_50, loss_100 = sess.run([total_loss, trip_loss_c, trip_loss_a, trip_loss_f, trip_loss_34, trip_loss_50, trip_loss_100], feed_dict={input_deltas: delta, 
                     input_images: batch_adv_image, 
                     pos_embedding_c: np.array(pos_emd_c).reshape((-1, 512)),
                     neg_embedding_c: np.array(neg_emd_c).reshape((-1, 512)),
-                    pos_embedding_d: np.array(pos_emd_d).reshape((-1, 512)),
-                    neg_embedding_d: np.array(neg_emd_d).reshape((-1, 512)),
                     pos_embedding_a: np.array(pos_emd_a).reshape((-1, 512)),
                     neg_embedding_a: np.array(neg_emd_a).reshape((-1, 512)),
                     pos_embedding_f: np.array(pos_emd_f).reshape((-1, 512)),
                     neg_embedding_f: np.array(neg_emd_f).reshape((-1, 512)),
-                    pos_embedding_g: np.array(pos_emd_g).reshape((-1, 512)),
-                    neg_embedding_g: np.array(neg_emd_g).reshape((-1, 512)),
                     pos_embedding_34: np.array(pos_emd_34).reshape((-1, 512)),
                     neg_embedding_34: np.array(neg_emd_34).reshape((-1, 512)),
                     pos_embedding_50: np.array(pos_emd_50).reshape((-1, 512)),
@@ -342,14 +280,10 @@ if __name__ == '__main__':
                                           input_images: batch_adv_image, 
                                           pos_embedding_c: np.array(pos_emd_c).reshape((-1, 512)),
                                           neg_embedding_c: np.array(neg_emd_c).reshape((-1, 512)),
-                                          pos_embedding_d: np.array(pos_emd_d).reshape((-1, 512)),
-                                          neg_embedding_d: np.array(neg_emd_d).reshape((-1, 512)),
                                           pos_embedding_a: np.array(pos_emd_a).reshape((-1, 512)),
                                           neg_embedding_a: np.array(neg_emd_a).reshape((-1, 512)),
                                           pos_embedding_f: np.array(pos_emd_f).reshape((-1, 512)),
                                           neg_embedding_f: np.array(neg_emd_f).reshape((-1, 512)),
-                                          pos_embedding_g: np.array(pos_emd_g).reshape((-1, 512)),
-                                          neg_embedding_g: np.array(neg_emd_g).reshape((-1, 512)),
                                           pos_embedding_34: np.array(pos_emd_34).reshape((-1, 512)),
                                           neg_embedding_34: np.array(neg_emd_34).reshape((-1, 512)),
                                           pos_embedding_50: np.array(pos_emd_50).reshape((-1, 512)),
@@ -359,19 +293,6 @@ if __name__ == '__main__':
                                           dropout_rate:1.0}, session=sess)
                 gradient = d_grad
 
-                # ADAM
-                #mt = beta1 * mt + (1.-beta1)*gradient
-                #vt = beta2 * vt + (1.-beta2)*np.multiply(gradient,gradient)
-                #mt_ = mt / (1-pow(beta1,i+1))
-                #vt_ = vt / (1-pow(beta2,i+1))
-                #next_delta = delta - 0.004 * (mt_ / (np.sqrt(vt_) + epsilon))
-
-                # RADAM
-
-                # ADAGRAD
-                #next_delta = delta - 0.2*np.multiply(gradient, np.sqrt(mt+epsilon))
-                #mt += np.multiply(gradient,gradient)
-                
                 # SGD
                 #next_delta = delta - step_size * gradient
 
@@ -389,8 +310,6 @@ if __name__ == '__main__':
                 next_delta = np.clip(next_delta, -limit_range*0.0078125, limit_range*0.0078125)
                 delta = np.clip(batch_adv_image+next_delta, -1.0, 1.0) - batch_adv_image
                 delta = np.around(delta * 128) * 0.0078125
-                #if(np.array_equal(np.clip(batch_adv_image+delta,-1.0,1.0), batch_adv_image)):
-                #    break
 
             # choose the best delta
             if(targeted and LA.norm(delta[0]) < LA.norm(min_delta)):
