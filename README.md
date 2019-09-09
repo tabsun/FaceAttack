@@ -14,7 +14,7 @@ opencv-python
 
 ## Pre-trained models
 
-You can download the needed model files from [Baidu Cloud]() but I know the download speed will be a pity:(
+You can download the needed model files from [Baidu Cloud](https://pan.baidu.com/s/1ViSYoOWCYOxZeX_9_7iUmQ) but I know the downloading speed will be a pity:(
 
 ## How to run it?
 
