@@ -8,7 +8,7 @@ import math
 from numpy import linalg as LA
 import random
 from tqdm import tqdm
-from losses.face_losses import triplet_loss
+from face_losses import triplet_loss
 from nets.L_Resnet_E_IR_GBN import get_resnet_gbn
 from nets.L_Resnet_E_IR import get_resnet
 from nets.L_Resnet_E_IR_fix_issue9 import get_resnet_fi9
