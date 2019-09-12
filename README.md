@@ -6,7 +6,13 @@ This code gets best score @ 4.31 which rank 10th in [Ali's competition of Anti-F
 
 ## Requirements
 
-tensorflow
+python3.5
+
+tensorlayer==1.7.0
+
+cuda 9.0
+
+tensorflow==1.10.0
 
 opencv-python
 
